@@ -299,6 +299,22 @@ test('deserialize survives hostile input', t => {
     });
 });
 
+test('deserialize copes with storage resolving null', t => {
+    const runtime = makeRuntime();
+    const manager = runtime.glowAssetManager;
+    // Nothing is registered for our asset type, so a real ScratchStorage resolves null
+    // here rather than rejecting. That is the path a project takes when its asset file
+    // is genuinely absent from the zip.
+    runtime.storage.load = () => Promise.resolve(null);
+
+    manager.deserialize([
+        {owner: 'glowMl', name: 'missing', md5ext: '00000000000000000000000000000000.json'}
+    ], null, false).then(() => {
+        t.same(manager.list(), [], 'the entry was dropped, not stored as null');
+        t.end();
+    });
+});
+
 test('deserialize accepts things that are not manifests at all', t => {
     const manager = makeRuntime().glowAssetManager;
     manager.set('owner', 'existing', 'json', bytes(1));

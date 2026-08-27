@@ -23,6 +23,7 @@
     "tap": "tap ./test/{unit,integration}/*.js",
     "tap:unit": "tap ./test/unit/*.js",
     "tap:integration": "tap ./test/integration/*.js",
+    "tap:glow": "tap ./test/{unit,integration}/glow_*.js --no-coverage",
     "test": "npm run lint && npm run tap",
     "watch": "webpack --progress --colors --watch",
     "version": "json -f package.json -I -e \"this.repository.sha = '$(git log -n1 --pretty=format:%H)'\""
