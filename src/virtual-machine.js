@@ -633,9 +633,11 @@ class VirtualMachine extends EventEmitter {
                 .concat(target.sprite.costumes.map(costume => costume.asset))
         ), []);
         const fonts = this.runtime.fontManager.serializeAssets();
+        const glowAssets = this.runtime.glowAssetManager.serializeAssets();
         return [
             ...costumesAndSounds,
-            ...fonts
+            ...fonts,
+            ...glowAssets
         ];
     }
 
@@ -650,10 +652,18 @@ class VirtualMachine extends EventEmitter {
             fileName: `${asset.assetId}.${asset.dataFormat}`,
             fileContent: asset.data
         }));
+        // Only whole projects: sb3.serialize() leaves glowAssets out of a sprite, so
+        // shipping the files with one would leave the sprite carrying data nothing in
+        // it refers to.
+        const glowAssetDescs = targetId ? [] : this.runtime.glowAssetManager.serializeAssets().map(asset => ({
+            fileName: `${asset.assetId}.${asset.dataFormat}`,
+            fileContent: asset.data
+        }));
         return [
             ...costumeDescs,
             ...soundDescs,
-            ...fontDescs
+            ...fontDescs,
+            ...glowAssetDescs
         ];
     }
 

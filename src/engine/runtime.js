@@ -20,6 +20,7 @@ const Variable = require('./variable');
 const xmlEscape = require('../util/xml-escape');
 const ScratchLinkWebSocket = require('../util/scratch-link-websocket');
 const FontManager = require('./tw-font-manager');
+const GlowAssetManager = require('./glow-asset-manager');
 const fetchWithTimeout = require('../util/fetch-with-timeout');
 const platform = require('./tw-platform.js');
 const safeStringify = require('../util/tw-safe-stringify.js');
@@ -521,6 +522,11 @@ class Runtime extends EventEmitter {
          * Responsible for managing custom fonts.
          */
         this.fontManager = new FontManager(this);
+
+        /**
+         * Responsible for arbitrary assets stored by extensions and addons.
+         */
+        this.glowAssetManager = new GlowAssetManager(this);
 
         /**
          * Maps extension ID to a JSON-serializable value.
@@ -2294,6 +2300,7 @@ class Runtime extends EventEmitter {
         this.emit(Runtime.RUNTIME_DISPOSED);
         this.ioDevices.clock.resetProjectTimer();
         this.fontManager.clear();
+        this.glowAssetManager.clear();
         // @todo clear out extensions? turboMode? etc.
 
         // *********** Cloud *******************
