@@ -21,20 +21,20 @@ const md5extOf = asset => `${asset.assetId}.${asset.dataFormat}`;
 test('set, get, has and list', t => {
     const manager = makeRuntime().glowAssetManager;
 
-    t.equal(manager.get('glowMl', 'training'), null, 'get before set');
-    t.notOk(manager.has('glowMl', 'training'), 'has before set');
+    t.equal(manager.get('glowML', 'training'), null, 'get before set');
+    t.notOk(manager.has('glowML', 'training'), 'has before set');
     t.same(manager.list(), [], 'list before set');
     t.equal(manager.serializeJSON(), null, 'serializeJSON is null when empty');
 
-    const asset = manager.set('glowMl', 'training', 'json', bytes(1, 2, 3));
+    const asset = manager.set('glowML', 'training', 'json', bytes(1, 2, 3));
     t.equal(asset.dataFormat, 'json', 'dataFormat is kept');
     t.same(asset.data, bytes(1, 2, 3), 'data is kept');
     t.ok(asset.assetId, 'an id was generated from the content');
 
-    t.equal(manager.get('glowMl', 'training'), asset, 'get returns the asset');
-    t.ok(manager.has('glowMl', 'training'), 'has after set');
+    t.equal(manager.get('glowML', 'training'), asset, 'get returns the asset');
+    t.ok(manager.has('glowML', 'training'), 'has after set');
     t.same(manager.list(), [
-        {ownerId: 'glowMl', name: 'training', dataFormat: 'json', byteLength: 3}
+        {ownerId: 'glowML', name: 'training', dataFormat: 'json', byteLength: 3}
     ], 'list describes it');
     t.end();
 });
@@ -67,13 +67,13 @@ test('owners and names do not collide', t => {
 
 test('re-setting a key replaces it without double counting', t => {
     const manager = makeRuntime().glowAssetManager;
-    manager.set('glowMl', 'training', 'json', bytes(1, 2, 3, 4));
+    manager.set('glowML', 'training', 'json', bytes(1, 2, 3, 4));
     t.equal(manager.getTotalBytes(), 4, 'first write');
 
-    manager.set('glowMl', 'training', 'json', bytes(5));
+    manager.set('glowML', 'training', 'json', bytes(5));
     t.equal(manager.getTotalBytes(), 1, 'second write replaced the first');
     t.equal(manager.list().length, 1, 'still one entry');
-    t.same(manager.get('glowMl', 'training').data, bytes(5), 'new content');
+    t.same(manager.get('glowML', 'training').data, bytes(5), 'new content');
     t.end();
 });
 
@@ -202,10 +202,10 @@ test('change fires on writes and not on reads', t => {
 
 test('serializeJSON and serializeAssets', t => {
     const manager = makeRuntime().glowAssetManager;
-    const asset = manager.set('glowMl', 'training', 'json', bytes(1, 2, 3));
+    const asset = manager.set('glowML', 'training', 'json', bytes(1, 2, 3));
 
     t.same(manager.serializeJSON(), [
-        {owner: 'glowMl', name: 'training', md5ext: md5extOf(asset)}
+        {owner: 'glowML', name: 'training', md5ext: md5extOf(asset)}
     ], 'the manifest names the file in the zip');
     t.same(manager.serializeAssets(), [asset], 'the assets themselves');
 
@@ -219,7 +219,7 @@ test('deserialize reads a manifest out of a zip', t => {
     const runtime = makeRuntime();
     const manager = runtime.glowAssetManager;
     const source = makeRuntime().glowAssetManager;
-    const asset = source.set('glowMl', 'training', 'json', bytes(4, 5, 6));
+    const asset = source.set('glowML', 'training', 'json', bytes(4, 5, 6));
 
     const zip = new JSZip();
     zip.file(md5extOf(asset), asset.data);
@@ -231,8 +231,8 @@ test('deserialize reads a manifest out of a zip', t => {
 
     manager.deserialize(source.serializeJSON(), zip, false).then(() => {
         t.ok(changed, 'it emits change');
-        t.same(manager.get('glowMl', 'training').data, bytes(4, 5, 6), 'the data came back');
-        t.equal(manager.get('glowMl', 'training').dataFormat, 'json', 'and the format');
+        t.same(manager.get('glowML', 'training').data, bytes(4, 5, 6), 'the data came back');
+        t.equal(manager.get('glowML', 'training').dataFormat, 'json', 'and the format');
         t.equal(manager.getTotalBytes(), 3, 'and the byte count');
         t.end();
     });
@@ -242,7 +242,7 @@ test('deserialize keeps or clears what is already there', t => {
     const runtime = makeRuntime();
     const manager = runtime.glowAssetManager;
     const source = makeRuntime().glowAssetManager;
-    const asset = source.set('glowMl', 'incoming', 'json', bytes(1));
+    const asset = source.set('glowML', 'incoming', 'json', bytes(1));
 
     const zip = new JSZip();
     zip.file(md5extOf(asset), asset.data);
@@ -253,12 +253,12 @@ test('deserialize keeps or clears what is already there', t => {
     manager.deserialize(manifest, zip, true)
         .then(() => {
             t.ok(manager.has('other', 'existing'), 'keepExisting keeps the old one');
-            t.ok(manager.has('glowMl', 'incoming'), 'and adds the new one');
+            t.ok(manager.has('glowML', 'incoming'), 'and adds the new one');
             return manager.deserialize(manifest, zip, false);
         })
         .then(() => {
             t.notOk(manager.has('other', 'existing'), 'without keepExisting the old one goes');
-            t.ok(manager.has('glowMl', 'incoming'), 'and the new one is there');
+            t.ok(manager.has('glowML', 'incoming'), 'and the new one is there');
             t.end();
         });
 });
@@ -271,7 +271,7 @@ test('deserialize survives hostile input', t => {
     runtime.storage.load = () => Promise.reject(new Error('not available offline'));
 
     const source = makeRuntime().glowAssetManager;
-    const good = source.set('glowMl', 'good', 'json', bytes(1, 2));
+    const good = source.set('glowML', 'good', 'json', bytes(1, 2));
     const zip = new JSZip();
     zip.file(md5extOf(good), good.data);
 
@@ -280,20 +280,20 @@ test('deserialize survives hostile input', t => {
         'a string',
         42,
         {},
-        {owner: 'glowMl', name: 'noMd5ext'},
-        {owner: 'glowMl', name: 'badMd5ext', md5ext: 42},
+        {owner: 'glowML', name: 'noMd5ext'},
+        {owner: 'glowML', name: 'badMd5ext', md5ext: 42},
         {owner: '', name: 'emptyOwner', md5ext: md5extOf(good)},
         {owner: 'glow/Ml', name: 'slashOwner', md5ext: md5extOf(good)},
-        {owner: 'glowMl', name: 'bad name', md5ext: md5extOf(good)},
-        {owner: 'glowMl', name: 'notWhitelisted', md5ext: '00000000000000000000000000000000.exe'},
-        {owner: 'glowMl', name: 'missingFromZip', md5ext: '00000000000000000000000000000000.json'},
+        {owner: 'glowML', name: 'bad name', md5ext: md5extOf(good)},
+        {owner: 'glowML', name: 'notWhitelisted', md5ext: '00000000000000000000000000000000.exe'},
+        {owner: 'glowML', name: 'missingFromZip', md5ext: '00000000000000000000000000000000.json'},
         // The one good entry, last, to prove the bad ones did not stop the loop.
-        {owner: 'glowMl', name: 'good', md5ext: md5extOf(good)}
+        {owner: 'glowML', name: 'good', md5ext: md5extOf(good)}
     ];
 
     manager.deserialize(manifest, zip, false).then(() => {
         t.same(manager.list(), [
-            {ownerId: 'glowMl', name: 'good', dataFormat: 'json', byteLength: 2}
+            {ownerId: 'glowML', name: 'good', dataFormat: 'json', byteLength: 2}
         ], 'only the valid entry was kept');
         t.end();
     });
@@ -308,7 +308,7 @@ test('deserialize copes with storage resolving null', t => {
     runtime.storage.load = () => Promise.resolve(null);
 
     manager.deserialize([
-        {owner: 'glowMl', name: 'missing', md5ext: '00000000000000000000000000000000.json'}
+        {owner: 'glowML', name: 'missing', md5ext: '00000000000000000000000000000000.json'}
     ], null, false).then(() => {
         t.same(manager.list(), [], 'the entry was dropped, not stored as null');
         t.end();

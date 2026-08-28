@@ -30,12 +30,12 @@ test('roundtrip through saveProjectSb3 and loadProject', t => {
 
     loadEmptyProject(originalVM)
         .then(() => {
-            const training = manager.set('glowMl', 'training', 'json', new Uint8Array([1, 2, 3, 4]));
+            const training = manager.set('glowML', 'training', 'json', new Uint8Array([1, 2, 3, 4]));
             manager.set('glowMidi', 'kit', 'json', new Uint8Array([5, 6]));
 
             const projectJSON = JSON.parse(originalVM.toJSON());
             t.same(projectJSON.glowAssets, [
-                {owner: 'glowMl', name: 'training', md5ext: md5extOf(training)},
+                {owner: 'glowML', name: 'training', md5ext: md5extOf(training)},
                 {owner: 'glowMidi', name: 'kit', md5ext: md5extOf(manager.get('glowMidi', 'kit'))}
             ], 'project.json carries the manifest');
 
@@ -57,11 +57,11 @@ test('roundtrip through saveProjectSb3 and loadProject', t => {
                 t.ok(changed, 'loadProject emits change');
                 t.notOk(newManager.has('stale', 'leftover'), 'loading a project clears what was there');
                 t.same(newManager.list(), [
-                    {ownerId: 'glowMl', name: 'training', dataFormat: 'json', byteLength: 4},
+                    {ownerId: 'glowML', name: 'training', dataFormat: 'json', byteLength: 4},
                     {ownerId: 'glowMidi', name: 'kit', dataFormat: 'json', byteLength: 2}
                 ], 'both entries came back');
                 t.same(
-                    newManager.get('glowMl', 'training').data,
+                    newManager.get('glowML', 'training').data,
                     new Uint8Array([1, 2, 3, 4]),
                     'with their bytes intact'
                 );
@@ -79,7 +79,7 @@ test('the data really is a file in the sb3, not part of project.json', t => {
 
     loadEmptyProject(vm)
         .then(() => {
-            asset = manager.set('glowMl', 'training', 'json', new Uint8Array([1, 2, 3, 4, 5, 6, 7]));
+            asset = manager.set('glowML', 'training', 'json', new Uint8Array([1, 2, 3, 4, 5, 6, 7]));
             return vm.saveProjectSb3('arraybuffer');
         })
         .then(projectSb3 => JSZip.loadAsync(projectSb3))
@@ -104,7 +104,7 @@ test('saveProjectSb3DontZip and vm.assets include the asset', t => {
     const manager = vm.runtime.glowAssetManager;
 
     loadEmptyProject(vm).then(() => {
-        const asset = manager.set('glowMl', 'training', 'json', new Uint8Array([8, 9]));
+        const asset = manager.set('glowML', 'training', 'json', new Uint8Array([8, 9]));
 
         const files = vm.saveProjectSb3DontZip();
         t.ok(md5extOf(asset) in files, 'saveProjectSb3DontZip lists the file');
@@ -128,7 +128,7 @@ test('assets stay out of an exported sprite', t => {
         const sprite = vm.runtime.targets[0];
         sprite.isStage = false;
 
-        const asset = manager.set('glowMl', 'training', 'json', new Uint8Array([1, 2, 3]));
+        const asset = manager.set('glowML', 'training', 'json', new Uint8Array([1, 2, 3]));
 
         const spriteJSON = JSON.parse(vm.toJSON(sprite.id));
         t.notOk('glowAssets' in spriteJSON, 'sprite.json has no manifest');
@@ -160,12 +160,12 @@ test('importing a sprite leaves project assets alone', t => {
         })
         .then(exportedSprite => loadEmptyProject(vm)
             .then(() => {
-                manager.set('glowMl', 'training', 'json', new Uint8Array([1, 2, 3]));
+                manager.set('glowML', 'training', 'json', new Uint8Array([1, 2, 3]));
                 return vm.addSprite(exportedSprite);
             }))
         .then(() => {
             // deserialize() runs with keepExisting, the same as it does for fonts.
-            t.ok(manager.has('glowMl', 'training'), 'still there after addSprite');
+            t.ok(manager.has('glowML', 'training'), 'still there after addSprite');
             t.equal(manager.getTotalBytes(), 3, 'and unchanged');
             t.end();
         });
@@ -176,7 +176,7 @@ test('dispose clears the manager', t => {
     const manager = vm.runtime.glowAssetManager;
 
     loadEmptyProject(vm).then(() => {
-        manager.set('glowMl', 'training', 'json', new Uint8Array([1, 2, 3]));
+        manager.set('glowML', 'training', 'json', new Uint8Array([1, 2, 3]));
         t.equal(manager.list().length, 1, 'stored');
 
         vm.runtime.dispose();
@@ -194,7 +194,7 @@ test('a project whose asset file is missing still loads', t => {
 
     loadEmptyProject(originalVM)
         .then(() => {
-            asset = manager.set('glowMl', 'training', 'json', new Uint8Array([1, 2, 3]));
+            asset = manager.set('glowML', 'training', 'json', new Uint8Array([1, 2, 3]));
             return originalVM.saveProjectSb3('arraybuffer');
         })
         .then(projectSb3 => JSZip.loadAsync(projectSb3))
