@@ -351,6 +351,37 @@ test('deserialize stops at the byte limit', t => {
     });
 });
 
+test('formatBytes reads like a size, not a number', t => {
+    const f = GlowAssetManager.formatBytes;
+    t.equal(f(0), '0 bytes', 'zero');
+    t.equal(f(3), '3 bytes', 'a few bytes');
+    t.equal(f(1023), '1023 bytes', 'just under a kilobyte');
+    t.equal(f(1024), '1 KB', 'exactly a kilobyte, with no pointless .0');
+    t.equal(f(1536), '1.5 KB', 'one decimal place');
+    t.equal(f(8388608), '8 MB', 'the default ceiling');
+    t.equal(f(11155908), '10.6 MB', 'the number from a real overflow');
+    t.equal(f(2 * 1024 * 1024 * 1024), '2 GB', 'gigabytes');
+    t.end();
+});
+
+test('the limit error carries the numbers as well as the message', t => {
+    const manager = makeRuntime().glowAssetManager;
+    manager.maxBytes = 10;
+    manager.set('owner', 'a', 'json', new Uint8Array(8));
+
+    let thrown = null;
+    try {
+        manager.set('owner', 'b', 'json', new Uint8Array(8));
+    } catch (error) {
+        thrown = error;
+    }
+    t.ok(thrown, 'it threw');
+    t.equal(thrown.totalBytes, 16, 'the size it would have been');
+    t.equal(thrown.maxBytes, 10, 'and the ceiling');
+    t.match(thrown.message, '16 bytes', 'the message is readable, not raw');
+    t.end();
+});
+
 test('static helpers', t => {
     t.same(GlowAssetManager.ALLOWED_FORMATS, ['json'], 'json only, for now');
     t.ok(GlowAssetManager.isAllowedFormat('json'), 'json is allowed');

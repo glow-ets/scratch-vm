@@ -69,6 +69,28 @@ const DEFAULT_WARN_BYTES = 4 * 1024 * 1024;
  */
 const makeKey = (ownerId, name) => `${ownerId}/${name}`;
 
+/**
+ * Byte counts end up in front of teachers and pupils, so say '10.6 MB' rather
+ * than 11155908. Powers of 1024, to match how the limits are written.
+ * @param {number} bytes - a byte count
+ * @returns {string} the same count, readable
+ */
+const formatBytes = bytes => {
+    if (bytes < 1024) {
+        return `${bytes} bytes`;
+    }
+    const units = ['KB', 'MB', 'GB'];
+    let value = bytes / 1024;
+    let unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+        value /= 1024;
+        unit++;
+    }
+    // One decimal place, but not a pointless '.0'.
+    const rounded = Math.round(value * 10) / 10;
+    return `${rounded} ${units[unit]}`;
+};
+
 class GlowAssetManager extends EventEmitter {
     /**
      * @param {Runtime} runtime - the runtime this belongs to
@@ -108,6 +130,14 @@ class GlowAssetManager extends EventEmitter {
     /** @returns {number} the default value of warnBytes */
     static get DEFAULT_WARN_BYTES () {
         return DEFAULT_WARN_BYTES;
+    }
+
+    /**
+     * @param {number} bytes - a byte count
+     * @returns {string} the same count, readable
+     */
+    static formatBytes (bytes) {
+        return formatBytes(bytes);
     }
 
     /** @returns {Array.<string>} the file formats that may be stored */
@@ -160,9 +190,14 @@ class GlowAssetManager extends EventEmitter {
         const totalBytes = this.getTotalBytes() - replacedBytes + data.byteLength;
         if (totalBytes > this.maxBytes) {
             // Throw before storing anything, so a refused write leaves no trace.
-            throw new Error(
-                `Storing ${key} would use ${totalBytes} bytes, over the limit of ${this.maxBytes}`
+            const error = new Error(
+                `Storing ${key} would use ${formatBytes(totalBytes)}, over the limit of ` +
+                `${formatBytes(this.maxBytes)}`
             );
+            // On the error too, so a caller can report it without parsing the message.
+            error.totalBytes = totalBytes;
+            error.maxBytes = this.maxBytes;
+            throw error;
         }
 
         const asset = this.runtime.storage.createAsset(
@@ -396,7 +431,10 @@ class GlowAssetManager extends EventEmitter {
                     if (this.getTotalBytes() + asset.data.byteLength > this.maxBytes) {
                         if (!reportedLimit) {
                             reportedLimit = true;
-                            log.warn(`glow assets: project is over the ${this.maxBytes} byte limit, skipping the rest`);
+                            log.warn(
+                                `glow assets: project is over the ${formatBytes(this.maxBytes)} limit, ` +
+                                `skipping the rest`
+                            );
                         }
                         continue;
                     }
