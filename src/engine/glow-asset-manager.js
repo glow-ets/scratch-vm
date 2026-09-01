@@ -48,6 +48,30 @@ const assetTypeFor = dataFormat => ({
 const NAME_REGEX = /^[\w.-]{1,64}$/;
 
 /**
+ * What a manifest entry's md5ext has to look like: a content hash and one extension,
+ * exactly as serializeJSON() writes it.
+ *
+ * This is not belt and braces, it is the only thing standing between a project file
+ * and AssetUtil.getByMd5ext, which trusts the string in three ways at once. It splits
+ * on the *first* dot while we read the format from the last, so 'abc.exe.json' passes
+ * a json whitelist and is then stored as 'exe'. It passes the leading part through to
+ * createAsset as the asset id with generateId false, and virtual-machine.js turns that
+ * id straight back into a zip member name on save, so 'evil/path.json' or a '..' walks
+ * out of the project root. And it interpolates the whole thing into a RegExp which it
+ * then runs against every file in the zip - so '(x+x+)+y.json' hangs the tab.
+ * @type {RegExp}
+ */
+const MD5EXT_REGEX = /^[0-9a-f]{32}\.[a-z0-9]{1,10}$/;
+
+/**
+ * Refuse a manifest longer than this. Well past any real project - the point is that a
+ * hand-written one cannot make the load loop long enough to matter before the byte
+ * ceiling has anything to say about it.
+ * @type {number}
+ */
+const MAX_ENTRIES = 64;
+
+/**
  * Refuse to store more than this in total. A classroom laptop has to survive whatever
  * a project throws at it, and an asset that cannot be saved is better than a project
  * that cannot be opened.
@@ -388,7 +412,20 @@ class GlowAssetManager extends EventEmitter {
         if (Array.isArray(json)) {
             let reportedLimit = false;
 
-            for (const entry of json) {
+            let entries = json;
+            if (entries.length > MAX_ENTRIES) {
+                log.warn(
+                    `glow assets: project lists ${entries.length} assets, more than the ` +
+                    `${MAX_ENTRIES} allowed; loading none of them`
+                );
+                entries = [];
+            }
+
+            // Carried rather than recomputed: getTotalBytes() walks the whole map, and
+            // asking it once per entry made this quadratic in the entry count.
+            let totalBytes = this.getTotalBytes();
+
+            for (const entry of entries) {
                 if (!entry || typeof entry !== 'object') {
                     continue;
                 }
@@ -399,6 +436,7 @@ class GlowAssetManager extends EventEmitter {
                     const md5ext = entry.md5ext;
                     if (
                         typeof md5ext !== 'string' ||
+                        !MD5EXT_REGEX.test(md5ext) ||
                         !GlowAssetManager.isValidName(ownerId) ||
                         !GlowAssetManager.isValidName(name) ||
                         this.has(ownerId, name)
@@ -428,7 +466,7 @@ class GlowAssetManager extends EventEmitter {
 
                     // The ceiling applies to what a project file asks us to load too,
                     // otherwise a crafted project could exhaust memory.
-                    if (this.getTotalBytes() + asset.data.byteLength > this.maxBytes) {
+                    if (totalBytes + asset.data.byteLength > this.maxBytes) {
                         if (!reportedLimit) {
                             reportedLimit = true;
                             log.warn(
@@ -436,9 +474,14 @@ class GlowAssetManager extends EventEmitter {
                                 `skipping the rest`
                             );
                         }
-                        continue;
+                        // Stop rather than skip. Carrying on would admit a smaller
+                        // entry later in the manifest, which is not what the message
+                        // above says and leaves what was kept depending on the order
+                        // the entries happened to be written in.
+                        break;
                     }
 
+                    totalBytes += asset.data.byteLength;
                     this.assets.set(makeKey(ownerId, name), {ownerId, name, asset});
                 } catch (e) {
                     log.error('could not load glow asset', e);

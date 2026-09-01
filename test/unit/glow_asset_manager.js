@@ -116,7 +116,7 @@ test('set rejects bad input', t => {
     t.end();
 });
 
-test('names that would reach Object.prototype are refused, and harmless anyway', t => {
+test('names that would reach Object.prototype are stored as ordinary keys', t => {
     const manager = makeRuntime().glowAssetManager;
     // '__proto__' passes the name regex, so the defence is the Map, not the regex.
     manager.set('__proto__', 'constructor', 'json', bytes(7));
@@ -394,4 +394,120 @@ test('static helpers', t => {
     t.equal(typeof GlowAssetManager.DEFAULT_MAX_BYTES, 'number', 'the default ceiling is exposed');
     t.ok(GlowAssetManager.DEFAULT_WARN_BYTES < GlowAssetManager.DEFAULT_MAX_BYTES, 'warn below max');
     t.end();
+});
+
+test('deserialize refuses an md5ext that is not a hash and one extension', t => {
+    const manager = makeRuntime().glowAssetManager;
+    // Nothing here should reach the network; fail storage.load() so a slip is loud.
+    manager.runtime.storage.load = () => Promise.reject(new Error('must not be reached'));
+
+    const source = makeRuntime().glowAssetManager;
+    const good = source.set('glowML', 'training', 'json', bytes(1, 2, 3));
+
+    const zip = new JSZip();
+    zip.file(md5extOf(good), good.data);
+    // Every hostile name below is also present in the zip, so only the check in
+    // deserialize can be what keeps it out.
+    const hostile = [
+        // Two dots: deserialize reads the format from the last, AssetUtil from the
+        // first, so this used to be stored with dataFormat 'exe'.
+        [`${good.assetId}.exe.json`, 'two extensions'],
+        // No dot at all: passes a naive format check, then throws inside AssetUtil.
+        ['json', 'no extension'],
+        // A path: assetId is written straight back out as a zip member name on save.
+        ['dir/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json', 'a path'],
+        ['../aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.json', 'a parent walk'],
+        // Interpolated into a RegExp and run over every file in the zip.
+        ['(x+x+)+y.json', 'a regular expression'],
+        ['abc.json', 'too short to be a hash'],
+        [`${good.assetId.toUpperCase()}.json`, 'uppercase hex'],
+        [`${good.assetId}.JSON`, 'uppercase extension'],
+        [`${good.assetId}.exe`, 'a format that is not whitelisted']
+    ];
+    for (const [md5ext] of hostile) {
+        zip.file(md5ext, bytes(9, 9, 9));
+    }
+
+    const manifest = hostile.map(([md5ext], i) => ({owner: 'attacker', name: `a${i}`, md5ext}));
+    // A valid entry alongside them, to prove one bad entry does not stop the load.
+    manifest.push({owner: 'glowML', name: 'training', md5ext: md5extOf(good)});
+
+    manager.deserialize(manifest, zip, false).then(() => {
+        hostile.forEach(([, what], i) => {
+            t.notOk(manager.has('attacker', `a${i}`), `${what} is refused`);
+        });
+        t.ok(manager.has('glowML', 'training'), 'the valid entry beside them still loads');
+        t.same(
+            manager.list().map(entry => entry.dataFormat),
+            ['json'],
+            'and everything admitted really is json'
+        );
+        t.equal({}.polluted, undefined, 'Object.prototype is untouched');
+        t.end();
+    });
+});
+
+test('deserialize takes the first of two entries with the same key', t => {
+    const manager = makeRuntime().glowAssetManager;
+    const source = makeRuntime().glowAssetManager;
+    const first = source.set('glowML', 'training', 'json', bytes(1));
+    const second = makeRuntime().glowAssetManager.set('glowML', 'training', 'json', bytes(2, 2));
+
+    const zip = new JSZip();
+    zip.file(md5extOf(first), first.data);
+    zip.file(md5extOf(second), second.data);
+
+    const manifest = [
+        {owner: 'glowML', name: 'training', md5ext: md5extOf(first)},
+        {owner: 'glowML', name: 'training', md5ext: md5extOf(second)}
+    ];
+
+    manager.deserialize(manifest, zip, false).then(() => {
+        t.equal(manager.list().length, 1, 'only one entry for the key');
+        t.same(manager.get('glowML', 'training').data, bytes(1), 'the first one won');
+        t.end();
+    });
+});
+
+test('deserialize stops at the byte limit rather than skipping past it', t => {
+    const manager = makeRuntime().glowAssetManager;
+    manager.maxBytes = 6;
+
+    const source = makeRuntime().glowAssetManager;
+    const first = source.set('owner', 'first', 'json', new Uint8Array(4));
+    const tooBig = source.set('owner', 'second', 'json', new Uint8Array(8));
+    // Small enough to fit after the one that did not. Admitting it would make what
+    // survives depend on the order the entries happen to be written in.
+    const small = source.set('owner', 'third', 'json', new Uint8Array(1));
+
+    const zip = new JSZip();
+    [first, tooBig, small].forEach(asset => zip.file(md5extOf(asset), asset.data));
+
+    manager.deserialize(source.serializeJSON(), zip, false).then(() => {
+        t.ok(manager.has('owner', 'first'), 'what fitted was kept');
+        t.notOk(manager.has('owner', 'second'), 'what did not fit was refused');
+        t.notOk(manager.has('owner', 'third'), 'and it stopped rather than carrying on');
+        t.equal(manager.getTotalBytes(), 4, 'the total respects the ceiling');
+        t.end();
+    });
+});
+
+test('deserialize refuses a manifest with absurdly many entries', t => {
+    const manager = makeRuntime().glowAssetManager;
+    manager.runtime.storage.load = () => Promise.reject(new Error('must not be reached'));
+
+    const source = makeRuntime().glowAssetManager;
+    const asset = source.set('glowML', 'training', 'json', bytes(1));
+    const zip = new JSZip();
+    zip.file(md5extOf(asset), asset.data);
+
+    const manifest = [];
+    for (let i = 0; i < 5000; i++) {
+        manifest.push({owner: 'glowML', name: `a${i}`, md5ext: md5extOf(asset)});
+    }
+
+    manager.deserialize(manifest, zip, false).then(() => {
+        t.same(manager.list(), [], 'none of them loaded');
+        t.end();
+    });
 });

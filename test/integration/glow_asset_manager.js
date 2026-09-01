@@ -214,3 +214,75 @@ test('a project whose asset file is missing still loads', t => {
             });
         });
 });
+
+/**
+ * Every other fixture here is written by saveProjectSb3 from the same code that reads
+ * it back, so nothing yet feeds the loader a file it did not produce itself. These two
+ * hand-edit project.json the way a corrupt or crafted .sb3 would.
+ * @param {object} vm a VM holding a saved project
+ * @param {Function} edit receives the parsed project.json and mutates it
+ * @returns {Promise<ArrayBuffer>} the same project with that edit applied
+ */
+const rewriteProjectJSON = (vm, edit) => vm.saveProjectSb3('arraybuffer')
+    .then(sb3 => JSZip.loadAsync(sb3))
+    .then(zip => zip.file('project.json').async('string')
+        .then(text => {
+            const project = JSON.parse(text);
+            edit(project);
+            zip.file('project.json', JSON.stringify(project));
+            return zip.generateAsync({type: 'arraybuffer'});
+        }));
+
+test('a project whose glowAssets is not an array still loads', t => {
+    const vm = makeVM();
+
+    loadEmptyProject(vm)
+        .then(() => {
+            vm.runtime.glowAssetManager.set('glowML', 'training', 'json', new Uint8Array([1, 2, 3]));
+            return rewriteProjectJSON(vm, project => {
+                project.glowAssets = 'not an array at all';
+            });
+        })
+        .then(damaged => {
+            const newVM = makeVM();
+            return newVM.loadProject(damaged).then(() => {
+                t.pass('the project still loaded');
+                t.same(newVM.runtime.glowAssetManager.list(), [], 'and stored nothing');
+                t.end();
+            });
+        });
+});
+
+test('a project with hostile glowAssets entries still loads, and loads none of them', t => {
+    const vm = makeVM();
+
+    loadEmptyProject(vm)
+        .then(() => {
+            vm.runtime.glowAssetManager.set('glowML', 'training', 'json', new Uint8Array([1, 2, 3]));
+            return rewriteProjectJSON(vm, project => {
+                const real = project.glowAssets[0].md5ext;
+                project.glowAssets = [
+                    null,
+                    'a string',
+                    42,
+                    {},
+                    {owner: 'glowML', name: 'training'},
+                    {owner: 'a/b', name: 'x', md5ext: real},
+                    {owner: 'ok', name: 'two-dots', md5ext: `${real.split('.')[0]}.exe.json`},
+                    {owner: 'ok', name: 'a-path', md5ext: `dir/${real}`},
+                    {owner: 'ok', name: 'a-regex', md5ext: '(x+x+)+y.json'}
+                ];
+            });
+        })
+        .then(damaged => {
+            const newVM = makeVM();
+            // Nothing here should go looking on the network.
+            newVM.runtime.storage.load = () => Promise.reject(new Error('not available offline'));
+            return newVM.loadProject(damaged).then(() => {
+                t.pass('the project still loaded');
+                t.same(newVM.runtime.glowAssetManager.list(), [], 'and admitted none of them');
+                t.equal({}.polluted, undefined, 'Object.prototype is untouched');
+                t.end();
+            });
+        });
+});
