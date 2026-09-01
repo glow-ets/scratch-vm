@@ -51,14 +51,16 @@ const NAME_REGEX = /^[\w.-]{1,64}$/;
  * What a manifest entry's md5ext has to look like: a content hash and one extension,
  * exactly as serializeJSON() writes it.
  *
- * This is not belt and braces, it is the only thing standing between a project file
- * and AssetUtil.getByMd5ext, which trusts the string in three ways at once. It splits
- * on the *first* dot while we read the format from the last, so 'abc.exe.json' passes
- * a json whitelist and is then stored as 'exe'. It passes the leading part through to
- * createAsset as the asset id with generateId false, and virtual-machine.js turns that
- * id straight back into a zip member name on save, so 'evil/path.json' or a '..' walks
- * out of the project root. And it interpolates the whole thing into a RegExp which it
- * then runs against every file in the zip - so '(x+x+)+y.json' hangs the tab.
+ * The only thing standing between a project file and AssetUtil.getByMd5ext, which
+ * trusts the string three ways at once:
+ *
+ * - it splits on the *first* dot while the format is read from the last, so
+ *   'abc.exe.json' passes a json whitelist and is stored as 'exe';
+ * - it passes the leading part to createAsset as the asset id with generateId false,
+ *   and virtual-machine.js turns that id back into a zip member name on save, so
+ *   'evil/path.json' or a '..' walks out of the project root;
+ * - it interpolates the whole string into a RegExp run against every file in the zip,
+ *   so '(x+x+)+y.json' hangs the tab.
  * @type {RegExp}
  */
 const MD5EXT_REGEX = /^[0-9a-f]{32}\.[a-z0-9]{1,10}$/;
@@ -421,8 +423,8 @@ class GlowAssetManager extends EventEmitter {
                 entries = [];
             }
 
-            // Carried rather than recomputed: getTotalBytes() walks the whole map, and
-            // asking it once per entry made this quadratic in the entry count.
+            // Carried, not recomputed: getTotalBytes() walks the whole map, so asking
+            // it once per entry would make this quadratic in the entry count.
             let totalBytes = this.getTotalBytes();
 
             for (const entry of entries) {
@@ -474,10 +476,8 @@ class GlowAssetManager extends EventEmitter {
                                 `skipping the rest`
                             );
                         }
-                        // Stop rather than skip. Carrying on would admit a smaller
-                        // entry later in the manifest, which is not what the message
-                        // above says and leaves what was kept depending on the order
-                        // the entries happened to be written in.
+                        // Stop rather than skip, so what survives does not depend on
+                        // the order the entries happen to be written in.
                         break;
                     }
 

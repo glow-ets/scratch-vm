@@ -410,7 +410,7 @@ test('deserialize refuses an md5ext that is not a hash and one extension', t => 
     // deserialize can be what keeps it out.
     const hostile = [
         // Two dots: deserialize reads the format from the last, AssetUtil from the
-        // first, so this used to be stored with dataFormat 'exe'.
+        // first, so without the check this is stored with dataFormat 'exe'.
         [`${good.assetId}.exe.json`, 'two extensions'],
         // No dot at all: passes a naive format check, then throws inside AssetUtil.
         ['json', 'no extension'],
