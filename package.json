@@ -11,6 +11,9 @@
   },
   "main": "./src/index.js",
   "browser": "./src/index.js",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "webpack --progress --colors --bail",
     "coverage": "tap ./test/{unit,integration}/*.js --coverage --coverage-report=lcov",
@@ -20,9 +23,14 @@
     "lint": "eslint .",
     "prepublish": "in-publish && npm run build || not-in-publish",
     "start": "webpack-dev-server",
+    "pretap": "node scripts/glow-check-node.js",
     "tap": "tap ./test/{unit,integration}/*.js",
+    "pretap:unit": "node scripts/glow-check-node.js",
     "tap:unit": "tap ./test/unit/*.js",
+    "pretap:integration": "node scripts/glow-check-node.js",
     "tap:integration": "tap ./test/integration/*.js",
+    "pretap:glow": "node scripts/glow-check-node.js",
+    "tap:glow": "tap ./test/{unit,integration}/glow_*.js --no-coverage",
     "test": "npm run lint && npm run tap",
     "watch": "webpack --progress --colors --watch",
     "version": "json -f package.json -I -e \"this.repository.sha = '$(git log -n1 --pretty=format:%H)'\""

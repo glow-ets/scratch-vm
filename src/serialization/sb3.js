@@ -710,6 +710,7 @@ const serialize = function (runtime, targetId, {allowOptimization = true} = {}) 
         });
 
     const fonts = runtime.fontManager.serializeJSON();
+    const glowAssets = runtime.glowAssetManager.serializeJSON();
 
     if (targetId) {
         const target = serializedTargets[0];
@@ -744,6 +745,13 @@ const serialize = function (runtime, targetId, {allowOptimization = true} = {}) 
 
     if (fonts) {
         obj.customFonts = fonts;
+    }
+
+    // Deliberately not attached in the single-target branch above: these are keyed by
+    // extension or addon, so putting them all in an exported sprite would hand out
+    // data belonging to something the sprite does not use.
+    if (glowAssets) {
+        obj.glowAssets = glowAssets;
     }
 
     // Assemble metadata
@@ -1507,6 +1515,16 @@ const deserialize = async function (json, runtime, zip, isSingleSprite) {
         fontPromise = Promise.resolve();
     }
 
+    // Arbitrary extension and addon assets. Nothing else waits on these, but they are
+    // read from the same zip, so they join the same barrier as the fonts.
+    let glowAssetPromise;
+    if (json.glowAssets) {
+        glowAssetPromise = runtime.glowAssetManager.deserialize(json.glowAssets, zip, isSingleSprite);
+    } else {
+        glowAssetPromise = Promise.resolve();
+    }
+    const assetManagerPromise = Promise.all([fontPromise, glowAssetPromise]);
+
     // First keep track of the current target order in the json,
     // then sort by the layer order property before parsing the targets
     // so that their corresponding render drawables can be created in
@@ -1517,7 +1535,7 @@ const deserialize = async function (json, runtime, zip, isSingleSprite) {
 
     const monitorObjects = json.monitors || [];
 
-    return fontPromise.then(() => targetObjects.map(target => parseScratchAssets(target, runtime, zip)))
+    return assetManagerPromise.then(() => targetObjects.map(target => parseScratchAssets(target, runtime, zip)))
         // Force this promise to wait for the next loop in the js tick. Let
         // storage have some time to send off asset requests.
         .then(assets => Promise.resolve(assets))
